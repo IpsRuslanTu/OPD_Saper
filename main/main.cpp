@@ -1,198 +1,185 @@
 #include <SFML/Graphics.hpp>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iostream>
+
+#include "constSaper.h"
+#include "saperFunc.h"
 
 using namespace sf;
+using namespace std;
+using namespace constSaper;
 
-int gridLogic[12][12];
-int gridView[12][12];
-
-void setNumbersOfMines(int arr[12][12]);
 void gameOver(Event event);
-void openEmptyLeft(int x, int y);
-void openEmptyRight(int x, int y);
-void openEmptyDown(int x, int y);
-void openEmptyUp(int x, int y);
 
-int main()
+bool startGame()
 {
-    srand(time(0));
-    RenderWindow window(VideoMode(1100, 750), "Saper");
+    // Объявление вектора на n строк по m элементов
+    vector<vector<int>> gridView(MAX_SIZE_FIELD, vector<int>(MAX_SIZE_FIELD));
+    vector<vector<int>> gridLogic(MAX_SIZE_FIELD, vector<int>(MAX_SIZE_FIELD));
 
-    // Ширина клетки поля
-    int widthSlot = 50;
+    RenderWindow window(VideoMode(WIDTH_WINDOW, HEIGTH_WINDOW), "Saper", Style::Titlebar);
 
-    sf::Vector2i offsetField(100, 100);
+    bool isLife = true; // Игрок жив
+    bool isWin = false; // Победа
+
+    int counterNumbers = 0;
+    int guessedNumbers = 0;
+
+    // Создание времени
+    Clock clock;
+    Clock gameTimeClock;
+    int gameTime = 0;
+
+    // Создание шрифта
+    Font font;
+    font.loadFromFile("fonts/arial.ttf");
+    Text textGameEnd("", font, 100);
+    textGameEnd.setStyle(Text::Bold);
+    textGameEnd.setPosition(150, 330);
+
+    Text textTime("Game time", font, 30);
+    textTime.setFillColor(Color::White);
+    textTime.setStyle(Text::Bold);
+
+    Text info("Esc - exit\n\nTab - new game", font, 25);
+    info.setFillColor(Color::White);
+    info.setStyle(Text::Bold);
+    info.setPosition(800, 330);
 
     // Загрузка текстуры и создание спрайта
     Texture texture;
     texture.loadFromFile("images/sprite.jpg");
     Sprite sprite(texture);
 
-    for (int i = 0; i < 12; i++)
-        for (int j = 0; j < 12; j++)
-        {
-            gridView[i][j] = 10;
-            if (rand() % 8 == 0)
-                gridLogic[i][j] = 9;
-            else
-                gridLogic[i][j] = 0;
-        }
-
-    setNumbersOfMines(gridLogic);
+    placeMines(gridLogic, gridView, MIN_SIZE_FIELD, MAX_SIZE_FIELD, EMPTY_CELL, MINE_CELL, UNOPENED_CELL, DIFFICULTY_GAME);
+    setNumbersOfMines(gridLogic, counterNumbers, MIN_SIZE_FIELD, MAX_SIZE_FIELD, MINE_CELL);
 
     while (window.isOpen())
     {
+        if (Keyboard::isKeyPressed(Keyboard::Tab)) //если таб, то перезагружаем игру
+            return true;
+        if (Keyboard::isKeyPressed(Keyboard::Escape)) //если эскейп, то выходим из игры
+            return false;
+
         Vector2i pos = Mouse::getPosition(window);
-        int x = (pos.x - offsetField.x) / widthSlot;
-        int y = (pos.y - offsetField.y) / widthSlot;
+        int x = (pos.x - OFFSET_FIELD.x) / WIDTH_CELL;
+        int y = (pos.y - OFFSET_FIELD.y) / WIDTH_CELL;
+
+        if (isLife && !isWin)
+            gameTime = gameTimeClock.getElapsedTime().asSeconds();
 
         Event event;
         while (window.pollEvent(event))
         {
             if (event.type == Event::Closed)
                 window.close();
-            if (event.type == Event::MouseButtonPressed)
+            if (isLife && !isWin)
             {
-
-                if (event.mouseButton.button == Mouse::Left)
+                if ((event.type == Event::MouseButtonPressed) && (x >= MIN_SIZE_FIELD) &&
+                    (x < MAX_SIZE_FIELD) && (y >= MIN_SIZE_FIELD) && (y < MAX_SIZE_FIELD))
                 {
-                    if (gridLogic[x][y] == 9)
+                    if (event.mouseButton.button == Mouse::Left)
                     {
-                        gridView[x][y] = gridLogic[x][y];
-                        gameOver(event);
+                        if (gridLogic[x][y] == MINE_CELL)
+                        {
+                            gridView[x][y] = gridLogic[x][y];
+                            isLife = false;
+                        }
+                        else if (gridLogic[x][y] == EMPTY_CELL)
+                        {
+                            {
+                                gridView[x][y] = gridLogic[x][y];
+                                openEmpty(gridLogic, gridView, x, y, MIN_SIZE_FIELD, MAX_SIZE_FIELD, EMPTY_CELL);
+                                openNumberAroundEmpty(gridLogic, gridView, MIN_SIZE_FIELD, MAX_SIZE_FIELD);
+                            }
+                        }
+                        else
+                        {
+                            gridView[x][y] = gridLogic[x][y];
+                            guessedNumbers = 0;
+                            for (int i = MIN_SIZE_FIELD; i < MAX_SIZE_FIELD; i++)
+                                for (int j = MIN_SIZE_FIELD; j < MAX_SIZE_FIELD; j++)
+                                {
+                                    if (gridView[i][j] >= 1 && gridView[i][j] <= 8)
+                                        guessedNumbers++;
+                                }
+                            if (guessedNumbers == counterNumbers)
+                                isWin = true;
+                        }
                     }
-                    else if (gridLogic[x][y] == 0)
+                    else if (event.mouseButton.button == Mouse::Right)
                     {
-                        gridView[x][y] = gridLogic[x][y];
-                        openEmptyLeft(x, y);
-                        openEmptyRight(x, y);
-                        openEmptyDown(x, y);
-                        openEmptyUp(x, y);
+                        if (gridView[x][y] == UNOPENED_CELL)
+                        {
+                            gridView[x][y] = FLAG_CELL;
+                        }
+                        else if (gridView[x][y] == FLAG_CELL)
+                            gridView[x][y] = UNOPENED_CELL;
                     }
-                    else
-                    {
-                        gridView[x][y] = gridLogic[x][y];
-                    }
-                }
-                else if (event.mouseButton.button == Mouse::Right)
-                {
-                    if (gridView[x][y] == 10)
-                    {
-                        gridView[x][y] = 11;
-                    }
-                    else if (gridView[x][y] == 11)
-                        gridView[x][y] = 10;
-                    // window.draw(sprite);
                 }
             }
         }
 
-        window.clear();
+        window.clear(Color(60, 60, 60));
 
-        for (int i = 0; i < 12; i++)
-            for (int j = 0; j < 12; j++)
+        for (int i = MIN_SIZE_FIELD; i < MAX_SIZE_FIELD; i++)
+            for (int j = MIN_SIZE_FIELD; j < MAX_SIZE_FIELD; j++)
             {
-                sprite.setTextureRect(IntRect(gridView[i][j] * widthSlot, 0, widthSlot, widthSlot));
-                sprite.setPosition(offsetField.x + i * widthSlot, offsetField.y + j * widthSlot);
+                sprite.setTextureRect(IntRect(gridView[i][j] * WIDTH_CELL, 0, WIDTH_CELL, WIDTH_CELL));
+                sprite.setPosition(OFFSET_FIELD.x + i * WIDTH_CELL, OFFSET_FIELD.y + j * WIDTH_CELL);
                 window.draw(sprite);
             }
 
+        if (!isLife)
+        {
+            sf::RectangleShape rectangle;
+            rectangle.setSize(sf::Vector2f(600, 200));
+            rectangle.setFillColor(sf::Color(0, 0, 0, 150));
+            rectangle.setPosition(100, 300);
+
+            textGameEnd.setFillColor(Color::Red);
+            textGameEnd.setString("Game Over!");
+            window.draw(rectangle);
+            window.draw(textGameEnd);
+        }
+
+        if (isWin)
+        {
+            sf::RectangleShape rectangle;
+            rectangle.setSize(sf::Vector2f(600, 200));
+            rectangle.setFillColor(sf::Color(0, 0, 0, 150));
+            rectangle.setPosition(100, 300);
+
+            textGameEnd.setFillColor(Color::Green);
+            textGameEnd.setString("You winner!");
+            window.draw(rectangle);
+            window.draw(textGameEnd);
+        }
+
+        std::ostringstream gameTimeString;
+        gameTimeString << gameTime;
+        textTime.setString("Game time: " + gameTimeString.str());
+        textTime.setPosition(800, 100);
+        window.draw(textTime);
+
+        window.draw(info);
+
         window.display();
     }
+}
+
+void gameRunning()
+{
+    if (startGame())
+    {
+        gameRunning();
+    }
+}
+
+int main()
+{
+    gameRunning();
     return 0;
-}
-
-void setNumbersOfMines(int arr[12][12])
-{
-    for (int i = 0; i < 12; i++)
-        for (int j = 0; j < 12; j++)
-        {
-            int n = 0;
-            if (arr[i][j] == 9)
-                continue;
-            if ((arr[i - 1][j] == 9) && (i > 0))
-                n++;
-            if ((arr[i][j - 1] == 9) && (j > 0))
-                n++;
-            if ((arr[i + 1][j] == 9) && (i < 11))
-                n++;
-            if ((arr[i][j + 1] == 9) && (j < 11))
-                n++;
-            if ((arr[i + 1][j + 1] == 9) && (i < 11) && (j < 11))
-                n++;
-            if ((arr[i - 1][j - 1] == 9) && (i > 0) && (j > 0))
-                n++;
-            if ((arr[i - 1][j + 1] == 9) && (i > 0) && (j < 11))
-                n++;
-            if ((arr[i + 1][j - 1] == 9) && (i < 11) && (j > 0))
-                n++;
-
-            arr[i][j] = n;
-        }
-}
-
-void gameOver(Event event)
-{
-    RenderWindow endWindow;
-    endWindow.create(VideoMode(300, 150), "Game Over!");
-    while (endWindow.isOpen())
-    {
-        while (endWindow.pollEvent(event))
-        {
-            if (event.type == Event::Closed)
-                endWindow.close();
-        }
-        sf::Font myFont;
-        myFont.loadFromFile("fonts/arial.ttf");
-        Text text("Game Over!", myFont, 50);
-        text.setFillColor(Color::Red);
-        endWindow.clear();
-        endWindow.draw(text);
-        endWindow.display();
-    }
-}
-
-void openEmptyLeft(int x, int y)
-{
-    if ((gridLogic[x - 1][y] >= 0) && (gridLogic[x - 1][y] <= 8))
-    {
-        gridView[x - 1][y] = gridLogic[x - 1][y];
-        if ((x - 1 > 0) && (gridLogic[x - 1][y] == 0))
-            openEmptyLeft(x - 1, y);
-    }
-}
-
-void openEmptyRight(int x, int y)
-{
-    if ((gridLogic[x + 1][y] >= 0) && (gridLogic[x + 1][y] <= 8))
-    {
-        gridView[x + 1][y] = gridLogic[x + 1][y];
-        if ((x + 1 < 11) && (gridLogic[x + 1][y] == 0))
-            openEmptyRight(x + 1, y);
-    }
-}
-
-void openEmptyDown(int x, int y)
-{
-    if (y < 11)
-    {
-        if ((gridLogic[x][y + 1] >= 0) && (gridLogic[x][y + 1] <= 8))
-        {
-            gridView[x][y + 1] = gridLogic[x][y + 1];
-            if ((y + 1 < 11) && (gridLogic[x][y + 1] == 0))
-                openEmptyDown(x, y + 1);
-        }
-    }
-}
-
-void openEmptyUp(int x, int y)
-{
-    if (y > 0)
-    {
-        if ((gridLogic[x][y - 1] >= 0) && (gridLogic[x][y - 1] <= 8))
-        {
-            gridView[x][y - 1] = gridLogic[x][y - 1];
-            if ((y - 1 > 0) && (gridLogic[x][y - 1] == 0))
-                openEmptyUp(x, y - 1);
-        }
-    }
 }
